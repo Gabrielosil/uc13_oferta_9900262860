@@ -1,675 +1,734 @@
-import React, { useRef, useEffect } from "https://esm.sh/react";
-import { createRoot } from "https://esm.sh/react-dom/client";
-import { Canvas, useFrame, useThree } from "https://esm.sh/@react-three/fiber";
-import { Bounds } from "https://esm.sh/@react-three/drei";
-import * as THREE from "https://esm.sh/three";
-import { create } from "https://esm.sh/zustand";
+let dom_replay = document.querySelector("#replay");
 
-const minTileIndex = -8;
-const maxTileIndex = 8;
-const tilesPerRow = maxTileIndex - minTileIndex + 1;
-const tileSize = 42;
+let dom_score = document.querySelector("#score");
 
-const playerState = {
-  currentRow: 0,
-  currentTile: 0,
-  movesQueue: [],
-  ref: null };
+let dom_canvas = document.createElement("canvas");
 
+document.querySelector("#canvas").appendChild(dom_canvas);
 
-function queueMove(direction) {
-  const isValidMove = endsUpInValidPosition(
-  { rowIndex: playerState.currentRow, tileIndex: playerState.currentTile },
-  [...playerState.movesQueue, direction]);
+let CTX = dom_canvas.getContext("2d");
 
+const W = (dom_canvas.width = 400);
 
-  if (!isValidMove) return;
+const H = (dom_canvas.height = 400);
 
-  playerState.movesQueue.push(direction);
-}
+let snake,
 
-function stepCompleted() {
-  const direction = playerState.movesQueue.shift();
+  food,
 
-  if (direction === "forward") playerState.currentRow += 1;
-  if (direction === "backward") playerState.currentRow -= 1;
-  if (direction === "left") playerState.currentTile -= 1;
-  if (direction === "right") playerState.currentTile += 1;
+  currentHue,
 
-  // Add new rows if the player is running out of them
-  if (playerState.currentRow === useMapStore.getState().rows.length - 10) {
-    useMapStore.getState().addRows();
+  cells = 20,
+
+  cellSize,
+
+  isGameOver = false,
+
+  tails = [],
+
+  score = 0,
+
+  maxScore = window.localStorage.getItem("maxScore") || undefined,
+
+  particles = [],
+
+  splashingParticleCount = 20,
+
+  cellsCount,
+
+  requestID;
+
+let helpers = {
+
+  Vec: class {
+
+    constructor(x, y) {
+
+      this.x = x;
+
+      this.y = y;
+
+    }
+
+    add(v) {
+
+      this.x += v.x;
+
+      this.y += v.y;
+
+      return this;
+
+    }
+
+    mult(v) {
+
+      if (v instanceof helpers.Vec) {
+
+        this.x *= v.x;
+
+        this.y *= v.y;
+
+        return this;
+
+      } else {
+
+        this.x *= v;
+
+        this.y *= v;
+
+        return this;
+
+      }
+
+    }
+
+  },
+
+  isCollision(v1, v2) {
+
+    return v1.x == v2.x && v1.y == v2.y;
+
+  },
+
+  garbageCollector() {
+
+    for (let i = 0; i < particles.length; i++) {
+
+      if (particles[i].size <= 0) {
+
+        particles.splice(i, 1);
+
+      }
+
+    }
+
+  },
+
+  drawGrid() {
+
+    CTX.lineWidth = 1.1;
+
+    CTX.strokeStyle = "#232332";
+
+    CTX.shadowBlur = 0;
+
+    for (let i = 1; i < cells; i++) {
+
+      let f = (W / cells) * i;
+
+      CTX.beginPath();
+
+      CTX.moveTo(f, 0);
+
+      CTX.lineTo(f, H);
+
+      CTX.stroke();
+
+      CTX.beginPath();
+
+      CTX.moveTo(0, f);
+
+      CTX.lineTo(W, f);
+
+      CTX.stroke();
+
+      CTX.closePath();
+
+    }
+
+  },
+
+  randHue() {
+
+    return ~~(Math.random() * 360);
+
+  },
+
+  hsl2rgb(hue, saturation, lightness) {
+
+    if (hue == undefined) {
+
+      return [0, 0, 0];
+
+    }
+
+    var chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+
+    var huePrime = hue / 60;
+
+    var secondComponent = chroma * (1 - Math.abs((huePrime % 2) - 1));
+
+    huePrime = ~~huePrime;
+
+    var red;
+
+    var green;
+
+    var blue;
+
+    if (huePrime === 0) {
+
+      red = chroma;
+
+      green = secondComponent;
+
+      blue = 0;
+
+    } else if (huePrime === 1) {
+
+      red = secondComponent;
+
+      green = chroma;
+
+      blue = 0;
+
+    } else if (huePrime === 2) {
+
+      red = 0;
+
+      green = chroma;
+
+      blue = secondComponent;
+
+    } else if (huePrime === 3) {
+
+      red = 0;
+
+      green = secondComponent;
+
+      blue = chroma;
+
+    } else if (huePrime === 4) {
+
+      red = secondComponent;
+
+      green = 0;
+
+      blue = chroma;
+
+    } else if (huePrime === 5) {
+
+      red = chroma;
+
+      green = 0;
+
+      blue = secondComponent;
+
+    }
+
+    var lightnessAdjustment = lightness - chroma / 2;
+
+    red += lightnessAdjustment;
+
+    green += lightnessAdjustment;
+
+    blue += lightnessAdjustment;
+
+    return [
+
+      Math.round(red * 255),
+
+      Math.round(green * 255),
+
+      Math.round(blue * 255)
+
+    ];
+
+  },
+
+  lerp(start, end, t) {
+
+    return start * (1 - t) + end * t;
+
   }
-
-  useGameStore.getState().updateScore(playerState.currentRow);
-}
-
-function setPlayerRef(ref) {
-  playerState.ref = ref;
-}
-
-function resetPlayerStore() {
-  playerState.currentRow = 0;
-  playerState.currentTile = 0;
-  playerState.movesQueue = [];
-
-  if (!playerState.ref) return;
-  playerState.ref.position.x = 0;
-  playerState.ref.position.y = 0;
-  playerState.ref.children[0].rotation.z = 0;
-}
-
-const useGameStore = create(set => ({
-  status: "running",
-  score: 0,
-  updateScore: rowIndex => {
-    set(state => ({ score: Math.max(rowIndex, state.score) }));
-  },
-  endGame: () => {
-    set({ status: "over" });
-  },
-  reset: () => {
-    useMapStore.getState().reset();
-    resetPlayerStore();
-    set({ status: "running", score: 0 });
-  } }));
-
-
-const useMapStore = create(set => ({
-  rows: generateRows(20),
-  addRows: () => {
-    const newRows = generateRows(20);
-    set(state => ({ rows: [...state.rows, ...newRows] }));
-  },
-  reset: () => set({ rows: generateRows(20) }) }));
-
-
-function Game() {
-  return /*#__PURE__*/(
-    React.createElement("div", { className: "game" }, /*#__PURE__*/
-    React.createElement(Scene, null, /*#__PURE__*/
-    React.createElement(Player, null), /*#__PURE__*/
-    React.createElement(Map, null)), /*#__PURE__*/
-
-    React.createElement(Score, null), /*#__PURE__*/
-    React.createElement(Controls, null), /*#__PURE__*/
-    React.createElement(Result, null)));
-
-
-}
-
-const Scene = ({ children }) => {
-  return /*#__PURE__*/(
-    React.createElement(Canvas, {
-      orthographic: true,
-      shadows: true,
-      camera: {
-        up: [0, 0, 1],
-        position: [300, -300, 300] } }, /*#__PURE__*/
-
-
-    React.createElement("ambientLight", null),
-    children));
-
 
 };
 
-function Controls() {
-  useEventListeners();
+let KEY = {
 
-  return /*#__PURE__*/(
-    React.createElement("div", { id: "controls" }, /*#__PURE__*/
-    React.createElement("div", null, /*#__PURE__*/
-    React.createElement("button", { onClick: () => queueMove("forward") }, "\u25B2"), /*#__PURE__*/
-    React.createElement("button", { onClick: () => queueMove("left") }, "\u25C0"), /*#__PURE__*/
-    React.createElement("button", { onClick: () => queueMove("backward") }, "\u25BC"), /*#__PURE__*/
-    React.createElement("button", { onClick: () => queueMove("right") }, "\u25B6"))));
+  ArrowUp: false,
 
+  ArrowRight: false,
 
+  ArrowDown: false,
 
-}
+  ArrowLeft: false,
 
-function Score() {
-  const score = useGameStore(state => state.score);
+  resetState() {
 
-  return /*#__PURE__*/React.createElement("div", { id: "score" }, score);
-}
+    this.ArrowUp = false;
 
-function Result() {
-  const status = useGameStore(state => state.status);
-  const score = useGameStore(state => state.score);
-  const reset = useGameStore(state => state.reset);
+    this.ArrowRight = false;
 
-  if (status === "running") return null;
+    this.ArrowDown = false;
 
-  return /*#__PURE__*/(
-    React.createElement("div", { id: "result-container" }, /*#__PURE__*/
-    React.createElement("div", { id: "result" }, /*#__PURE__*/
-    React.createElement("h1", null, "Game Over"), /*#__PURE__*/
-    React.createElement("p", null, "Your score: ", score), /*#__PURE__*/
-    React.createElement("button", { onClick: reset }, "Retry"))));
+    this.ArrowLeft = false;
 
+  },
 
+  listen() {
 
-}
+    addEventListener(
 
-function Player() {
-  const player = useRef(null);
-  const lightRef = useRef(null);
-  const camera = useThree(state => state.camera);
+      "keydown",
 
-  usePlayerAnimation(player);
+      (e) => {
 
-  useEffect(() => {
-    if (!player.current) return;
-    if (!lightRef.current) return;
+        if (e.key === "ArrowUp" && this.ArrowDown) return;
 
-    // Attach the camera to the player
-    player.current.add(camera);
-    lightRef.current.target = player.current;
+        if (e.key === "ArrowDown" && this.ArrowUp) return;
 
-    // Set the player reference in the store
-    setPlayerRef(player.current);
-  });
+        if (e.key === "ArrowLeft" && this.ArrowRight) return;
 
-  return /*#__PURE__*/(
-    React.createElement(Bounds, { fit: true, clip: true, observe: true, margin: 10 }, /*#__PURE__*/
-    React.createElement("group", { ref: player }, /*#__PURE__*/
-    React.createElement("group", null, /*#__PURE__*/
-    React.createElement("mesh", { position: [0, 0, 10], castShadow: true, receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [15, 15, 20] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0xffffff, flatShading: true })), /*#__PURE__*/
+        if (e.key === "ArrowRight" && this.ArrowLeft) return;
 
-    React.createElement("mesh", { position: [0, 0, 21], castShadow: true, receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [2, 4, 2] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0xf0619a, flatShading: true }))), /*#__PURE__*/
+        this[e.key] = true;
 
+        Object.keys(this)
 
-    React.createElement(DirectionalLight, { ref: lightRef }))));
+          .filter((f) => f !== e.key && f !== "listen" && f !== "resetState")
 
+          .forEach((k) => {
 
+            this[k] = false;
 
-}
+          });
 
-function DirectionalLight({ ref }) {
-  return /*#__PURE__*/(
-    React.createElement("directionalLight", {
-      ref: ref,
-      position: [-100, -100, 200],
-      up: [0, 0, 1],
-      castShadow: true,
-      "shadow-mapSize": [2048, 2048],
-      "shadow-camera-left": -400,
-      "shadow-camera-right": 400,
-      "shadow-camera-top": 400,
-      "shadow-camera-bottom": -400,
-      "shadow-camera-near": 50,
-      "shadow-camera-far": 400 }));
+      },
 
+      false
 
-}
+    );
 
-function Map() {
-  const rows = useMapStore(state => state.rows);
-
-  return /*#__PURE__*/(
-    React.createElement(React.Fragment, null, /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: 0 }), /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: -1 }), /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: -2 }), /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: -3 }), /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: -4 }), /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: -5 }), /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: -6 }), /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: -7 }), /*#__PURE__*/
-    React.createElement(Grass, { rowIndex: -8 }),
-
-    rows.map((rowData, index) => /*#__PURE__*/
-    React.createElement(Row, { key: index, rowIndex: index + 1, rowData: rowData }))));
-
-
-
-}
-
-function Row({ rowIndex, rowData }) {
-  switch (rowData.type) {
-    case "forest":{
-        return /*#__PURE__*/React.createElement(Forest, { rowIndex: rowIndex, rowData: rowData });
-      }
-    case "car":{
-        return /*#__PURE__*/React.createElement(CarLane, { rowIndex: rowIndex, rowData: rowData });
-      }
-    case "truck":{
-        return /*#__PURE__*/React.createElement(TruckLane, { rowIndex: rowIndex, rowData: rowData });
-      }}
-
-}
-
-function Forest({ rowIndex, rowData }) {
-  return /*#__PURE__*/(
-    React.createElement(Grass, { rowIndex: rowIndex },
-    rowData.trees.map((tree, index) => /*#__PURE__*/
-    React.createElement(Tree, { key: index, tileIndex: tree.tileIndex, height: tree.height }))));
-
-
-
-}
-
-function CarLane({ rowIndex, rowData }) {
-  return /*#__PURE__*/(
-    React.createElement(Road, { rowIndex: rowIndex },
-    rowData.vehicles.map((vehicle, index) => /*#__PURE__*/
-    React.createElement(Car, {
-      key: index,
-      rowIndex: rowIndex,
-      initialTileIndex: vehicle.initialTileIndex,
-      direction: rowData.direction,
-      speed: rowData.speed,
-      color: vehicle.color }))));
-
-
-
-
-}
-
-function TruckLane({ rowIndex, rowData }) {
-  return /*#__PURE__*/(
-    React.createElement(Road, { rowIndex: rowIndex },
-    rowData.vehicles.map((vehicle, index) => /*#__PURE__*/
-    React.createElement(Truck, {
-      key: index,
-      rowIndex: rowIndex,
-      color: vehicle.color,
-      initialTileIndex: vehicle.initialTileIndex,
-      direction: rowData.direction,
-      speed: rowData.speed }))));
-
-
-
-
-}
-
-function Grass({ rowIndex, children }) {
-  return /*#__PURE__*/(
-    React.createElement("group", { "position-y": rowIndex * tileSize }, /*#__PURE__*/
-    React.createElement("mesh", { receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [tilesPerRow * tileSize, tileSize, 3] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0xbaf455, flatShading: true })), /*#__PURE__*/
-
-    React.createElement("mesh", { receiveShadow: true, "position-x": tilesPerRow * tileSize }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [tilesPerRow * tileSize, tileSize, 3] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0x99c846, flatShading: true })), /*#__PURE__*/
-
-    React.createElement("mesh", { receiveShadow: true, "position-x": -tilesPerRow * tileSize }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [tilesPerRow * tileSize, tileSize, 3] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0x99c846, flatShading: true })),
-
-    children));
-
-
-}
-
-function Road({ rowIndex, children }) {
-  return /*#__PURE__*/(
-    React.createElement("group", { "position-y": rowIndex * tileSize }, /*#__PURE__*/
-    React.createElement("mesh", { receiveShadow: true }, /*#__PURE__*/
-    React.createElement("planeGeometry", { args: [tilesPerRow * tileSize, tileSize] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0x454a59, flatShading: true })), /*#__PURE__*/
-
-    React.createElement("mesh", { receiveShadow: true, "position-x": tilesPerRow * tileSize }, /*#__PURE__*/
-    React.createElement("planeGeometry", { args: [tilesPerRow * tileSize, tileSize] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0x393d49, flatShading: true })), /*#__PURE__*/
-
-    React.createElement("mesh", { receiveShadow: true, "position-x": -tilesPerRow * tileSize }, /*#__PURE__*/
-    React.createElement("planeGeometry", { args: [tilesPerRow * tileSize, tileSize] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0x393d49, flatShading: true })),
-
-    children));
-
-
-}
-
-function Tree({ tileIndex, height }) {
-  return /*#__PURE__*/(
-    React.createElement("group", { "position-x": tileIndex * tileSize }, /*#__PURE__*/
-    React.createElement("mesh", { "position-z": height / 2 + 20, castShadow: true, receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [30, 30, height] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0x7aa21d, flatShading: true })), /*#__PURE__*/
-
-    React.createElement("mesh", { "position-z": 10, castShadow: true, receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [15, 15, 20] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0x4d2926, flatShading: true }))));
-
-
-
-}
-
-function Car({ rowIndex, initialTileIndex, direction, speed, color }) {
-  const car = useRef(null);
-  useVehicleAnimation(car, direction, speed);
-  useHitDetection(car, rowIndex);
-
-  return /*#__PURE__*/(
-    React.createElement("group", {
-      "position-x": initialTileIndex * tileSize,
-      "rotation-z": direction ? 0 : Math.PI,
-      ref: car }, /*#__PURE__*/
-
-    React.createElement("mesh", { position: [0, 0, 12], castShadow: true, receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [60, 30, 15] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: color, flatShading: true })), /*#__PURE__*/
-
-    React.createElement("mesh", { position: [-6, 0, 25.5], castShadow: true, receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [33, 24, 12] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0xffffff, flatShading: true })), /*#__PURE__*/
-
-    React.createElement(Wheel, { x: -18 }), /*#__PURE__*/
-    React.createElement(Wheel, { x: 18 })));
-
-
-}
-
-function Truck({ rowIndex, initialTileIndex, direction, speed, color }) {
-  const truck = useRef(null);
-  useVehicleAnimation(truck, direction, speed);
-  useHitDetection(truck, rowIndex);
-
-  return /*#__PURE__*/(
-    React.createElement("group", {
-      "position-x": initialTileIndex * tileSize,
-      "rotation-z": direction ? 0 : Math.PI,
-      ref: truck }, /*#__PURE__*/
-
-    React.createElement("mesh", { position: [-15, 0, 25], castShadow: true, receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [70, 35, 35] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0xb4c6fc, flatShading: true })), /*#__PURE__*/
-
-    React.createElement("mesh", { position: [35, 0, 20], castShadow: true, receiveShadow: true }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [30, 30, 30] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: color, flatShading: true })), /*#__PURE__*/
-
-    React.createElement(Wheel, { x: -35 }), /*#__PURE__*/
-    React.createElement(Wheel, { x: 5 }), /*#__PURE__*/
-    React.createElement(Wheel, { x: 37 })));
-
-
-}
-
-function Wheel({ x }) {
-  return /*#__PURE__*/(
-    React.createElement("mesh", { position: [x, 0, 6] }, /*#__PURE__*/
-    React.createElement("boxGeometry", { args: [12, 33, 12] }), /*#__PURE__*/
-    React.createElement("meshLambertMaterial", { color: 0x333333, flatShading: true })));
-
-
-}
-
-function useVehicleAnimation(ref, direction, speed) {
-  useFrame((state, delta) => {
-    if (!ref.current) return;
-    const vehicle = ref.current;
-
-    const beginningOfRow = (minTileIndex - 2) * tileSize;
-    const endOfRow = (maxTileIndex + 2) * tileSize;
-
-    if (direction) {
-      vehicle.position.x =
-      vehicle.position.x > endOfRow ?
-      beginningOfRow :
-      vehicle.position.x + speed * delta;
-    } else {
-      vehicle.position.x =
-      vehicle.position.x < beginningOfRow ?
-      endOfRow :
-      vehicle.position.x - speed * delta;
-    }
-  });
-}
-
-function useEventListeners() {
-  useEffect(() => {
-    const handleKeyDown = event => {
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        queueMove("forward");
-      } else if (event.key === "ArrowDown") {
-        event.preventDefault();
-        queueMove("backward");
-      } else if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        queueMove("left");
-      } else if (event.key === "ArrowRight") {
-        event.preventDefault();
-        queueMove("right");
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    // Cleanup function to remove the event listener
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-}
-
-function usePlayerAnimation(ref) {
-  const moveClock = new THREE.Clock(false);
-
-  useFrame(() => {
-    if (!ref.current) return;
-    if (!playerState.movesQueue.length) return;
-    const player = ref.current;
-
-    if (!moveClock.running) moveClock.start();
-
-    const stepTime = 0.2; // Seconds it takes to take a step
-    const progress = Math.min(1, moveClock.getElapsedTime() / stepTime);
-
-    setPosition(player, progress);
-    setRotation(player, progress);
-
-    // Once a step has ended
-    if (progress >= 1) {
-      stepCompleted();
-      moveClock.stop();
-    }
-  });
-}
-
-function setPosition(player, progress) {
-  const startX = playerState.currentTile * tileSize;
-  const startY = playerState.currentRow * tileSize;
-  let endX = startX;
-  let endY = startY;
-
-  if (playerState.movesQueue[0] === "left") endX -= tileSize;
-  if (playerState.movesQueue[0] === "right") endX += tileSize;
-  if (playerState.movesQueue[0] === "forward") endY += tileSize;
-  if (playerState.movesQueue[0] === "backward") endY -= tileSize;
-
-  player.position.x = THREE.MathUtils.lerp(startX, endX, progress);
-  player.position.y = THREE.MathUtils.lerp(startY, endY, progress);
-  player.children[0].position.z = Math.sin(progress * Math.PI) * 8;
-}
-
-function setRotation(player, progress) {
-  let endRotation = 0;
-  if (playerState.movesQueue[0] == "forward") endRotation = 0;
-  if (playerState.movesQueue[0] == "left") endRotation = Math.PI / 2;
-  if (playerState.movesQueue[0] == "right") endRotation = -Math.PI / 2;
-  if (playerState.movesQueue[0] == "backward") endRotation = Math.PI;
-
-  player.children[0].rotation.z = THREE.MathUtils.lerp(
-  player.children[0].rotation.z,
-  endRotation,
-  progress);
-
-}
-
-function calculateFinalPosition(currentPosition, moves) {
-  return moves.reduce((position, direction) => {
-    if (direction === "forward")
-    return {
-      rowIndex: position.rowIndex + 1,
-      tileIndex: position.tileIndex };
-
-    if (direction === "backward")
-    return {
-      rowIndex: position.rowIndex - 1,
-      tileIndex: position.tileIndex };
-
-    if (direction === "left")
-    return {
-      rowIndex: position.rowIndex,
-      tileIndex: position.tileIndex - 1 };
-
-    if (direction === "right")
-    return {
-      rowIndex: position.rowIndex,
-      tileIndex: position.tileIndex + 1 };
-
-    return position;
-  }, currentPosition);
-}
-
-function endsUpInValidPosition(currentPosition, moves) {
-  // Calculate where the player would end up after the move
-  const finalPosition = calculateFinalPosition(currentPosition, moves);
-
-  // Detect if we hit the edge of the board
-  if (
-  finalPosition.rowIndex === -1 ||
-  finalPosition.tileIndex === minTileIndex - 1 ||
-  finalPosition.tileIndex === maxTileIndex + 1)
-  {
-    // Invalid move, ignore move command
-    return false;
   }
 
-  // Detect if we hit a tree
-  const finalRow = useMapStore.getState().rows[finalPosition.rowIndex - 1];
-  if (
-  finalRow &&
-  finalRow.type === "forest" &&
-  finalRow.trees.some(tree => tree.tileIndex === finalPosition.tileIndex))
-  {
-    // Invalid move, ignore move command
-    return false;
+};
+
+class Snake {
+
+  constructor(i, type) {
+
+    this.pos = new helpers.Vec(W / 2, H / 2);
+
+    this.dir = new helpers.Vec(0, 0);
+
+    this.type = type;
+
+    this.index = i;
+
+    this.delay = 5;
+
+    this.size = W / cells;
+
+    this.color = "white";
+
+    this.history = [];
+
+    this.total = 1;
+
   }
 
-  return true;
-}
+  draw() {
 
-function generateRows(amount) {
-  const rows = [];
-  for (let i = 0; i < amount; i++) {
-    const rowData = generateRow();
-    rows.push(rowData);
-  }
-  return rows;
-}
+    let { x, y } = this.pos;
 
-function generateRow() {
-  const type = randomElement(["car", "truck", "forest"]);
-  if (type === "car") return generateCarLaneMetadata();
-  if (type === "truck") return generateTruckLaneMetadata();
-  return generateForesMetadata();
-}
+    CTX.fillStyle = this.color;
 
-function randomElement(array) {
-  return array[Math.floor(Math.random() * array.length)];
-}
+    CTX.shadowBlur = 20;
 
-function generateForesMetadata() {
-  const occupiedTiles = new Set();
-  const trees = Array.from({ length: 4 }, () => {
-    let tileIndex;
-    do {
-      tileIndex = THREE.MathUtils.randInt(minTileIndex, maxTileIndex);
-    } while (occupiedTiles.has(tileIndex));
-    occupiedTiles.add(tileIndex);
+    CTX.shadowColor = "rgba(255,255,255,.3 )";
 
-    const height = randomElement([20, 45, 60]);
+    CTX.fillRect(x, y, this.size, this.size);
 
-    return { tileIndex, height };
-  });
+    CTX.shadowBlur = 0;
 
-  return { type: "forest", trees };
-}
+    if (this.total >= 2) {
 
-function generateCarLaneMetadata() {
-  const direction = randomElement([true, false]);
-  const speed = randomElement([125, 156, 188]);
+      for (let i = 0; i < this.history.length - 1; i++) {
 
-  const occupiedTiles = new Set();
+        let { x, y } = this.history[i];
 
-  const vehicles = Array.from({ length: 3 }, () => {
-    let initialTileIndex;
-    do {
-      initialTileIndex = THREE.MathUtils.randInt(minTileIndex, maxTileIndex);
-    } while (occupiedTiles.has(initialTileIndex));
-    occupiedTiles.add(initialTileIndex - 1);
-    occupiedTiles.add(initialTileIndex);
-    occupiedTiles.add(initialTileIndex + 1);
+        CTX.lineWidth = 1;
 
-    const color = randomElement([0xa52523, 0xbdb638, 0x78b14b]);
+        CTX.fillStyle = "rgba(225,225,225,1)";
 
-    return { initialTileIndex, color };
-  });
+        CTX.fillRect(x, y, this.size, this.size);
 
-  return { type: "car", direction, speed, vehicles };
-}
-
-function generateTruckLaneMetadata() {
-  const direction = randomElement([true, false]);
-  const speed = randomElement([125, 156, 188]);
-
-  const occupiedTiles = new Set();
-
-  const vehicles = Array.from({ length: 2 }, () => {
-    let initialTileIndex;
-    do {
-      initialTileIndex = THREE.MathUtils.randInt(minTileIndex, maxTileIndex);
-    } while (occupiedTiles.has(initialTileIndex));
-    occupiedTiles.add(initialTileIndex - 2);
-    occupiedTiles.add(initialTileIndex - 1);
-    occupiedTiles.add(initialTileIndex);
-    occupiedTiles.add(initialTileIndex + 1);
-    occupiedTiles.add(initialTileIndex + 2);
-
-    const color = randomElement([0xa52523, 0xbdb638, 0x78b14b]);
-
-    return { initialTileIndex, color };
-  });
-
-  return { type: "truck", direction, speed, vehicles };
-}
-
-function useHitDetection(vehicle, rowIndex) {
-  const endGame = useGameStore(state => state.endGame);
-
-  useFrame(() => {
-    if (!vehicle.current) return;
-    if (!playerState.ref) return;
-
-    if (
-    rowIndex === playerState.currentRow ||
-    rowIndex === playerState.currentRow + 1 ||
-    rowIndex === playerState.currentRow - 1)
-    {
-      const vehicleBoundingBox = new THREE.Box3();
-      vehicleBoundingBox.setFromObject(vehicle.current);
-
-      const playerBoundingBox = new THREE.Box3();
-      playerBoundingBox.setFromObject(playerState.ref);
-
-      if (playerBoundingBox.intersectsBox(vehicleBoundingBox)) {
-        endGame();
       }
+
     }
-  });
+
+  }
+
+  walls() {
+
+    let { x, y } = this.pos;
+
+    if (x + cellSize > W) {
+
+      this.pos.x = 0;
+
+    }
+
+    if (y + cellSize > W) {
+
+      this.pos.y = 0;
+
+    }
+
+    if (y < 0) {
+
+      this.pos.y = H - cellSize;
+
+    }
+
+    if (x < 0) {
+
+      this.pos.x = W - cellSize;
+
+    }
+
+  }
+
+  controlls() {
+
+    let dir = this.size;
+
+    if (KEY.ArrowUp) {
+
+      this.dir = new helpers.Vec(0, -dir);
+
+    }
+
+    if (KEY.ArrowDown) {
+
+      this.dir = new helpers.Vec(0, dir);
+
+    }
+
+    if (KEY.ArrowLeft) {
+
+      this.dir = new helpers.Vec(-dir, 0);
+
+    }
+
+    if (KEY.ArrowRight) {
+
+      this.dir = new helpers.Vec(dir, 0);
+
+    }
+
+  }
+
+  selfCollision() {
+
+    for (let i = 0; i < this.history.length; i++) {
+
+      let p = this.history[i];
+
+      if (helpers.isCollision(this.pos, p)) {
+
+        isGameOver = true;
+
+      }
+
+    }
+
+  }
+
+  update() {
+
+    this.walls();
+
+    this.draw();
+
+    this.controlls();
+
+    if (!this.delay--) {
+
+      if (helpers.isCollision(this.pos, food.pos)) {
+
+        incrementScore();
+
+        particleSplash();
+
+        food.spawn();
+
+        this.total++;
+
+      }
+
+      this.history[this.total - 1] = new helpers.Vec(this.pos.x, this.pos.y);
+
+      for (let i = 0; i < this.total - 1; i++) {
+
+        this.history[i] = this.history[i + 1];
+
+      }
+
+      this.pos.add(this.dir);
+
+      this.delay = 5;
+
+      this.total > 3 ? this.selfCollision() : null;
+
+    }
+
+  }
+
 }
 
-const root = createRoot(document.getElementById("root"));
-root.render( /*#__PURE__*/React.createElement(Game, null));
+class Food {
+
+  constructor() {
+
+    this.pos = new helpers.Vec(
+
+      ~~(Math.random() * cells) * cellSize,
+
+      ~~(Math.random() * cells) * cellSize
+
+    );
+
+    this.color = currentHue = `hsl(${~~(Math.random() * 360)},100%,50%)`;
+
+    this.size = cellSize;
+
+  }
+
+  draw() {
+
+    let { x, y } = this.pos;
+
+    CTX.globalCompositeOperation = "lighter";
+
+    CTX.shadowBlur = 20;
+
+    CTX.shadowColor = this.color;
+
+    CTX.fillStyle = this.color;
+
+    CTX.fillRect(x, y, this.size, this.size);
+
+    CTX.globalCompositeOperation = "source-over";
+
+    CTX.shadowBlur = 0;
+
+  }
+
+  spawn() {
+
+    let randX = ~~(Math.random() * cells) * this.size;
+
+    let randY = ~~(Math.random() * cells) * this.size;
+
+    for (let path of snake.history) {
+
+      if (helpers.isCollision(new helpers.Vec(randX, randY), path)) {
+
+        return this.spawn();
+
+      }
+
+    }
+
+    this.color = currentHue = `hsl(${helpers.randHue()}, 100%, 50%)`;
+
+    this.pos = new helpers.Vec(randX, randY);
+
+  }
+
+}
+
+class Particle {
+
+  constructor(pos, color, size, vel) {
+
+    this.pos = pos;
+
+    this.color = color;
+
+    this.size = Math.abs(size / 2);
+
+    this.ttl = 0;
+
+    this.gravity = -0.2;
+
+    this.vel = vel;
+
+  }
+
+  draw() {
+
+    let { x, y } = this.pos;
+
+    let hsl = this.color
+
+      .split("")
+
+      .filter((l) => l.match(/[^hsl()$% ]/g))
+
+      .join("")
+
+      .split(",")
+
+      .map((n) => +n);
+
+    let [r, g, b] = helpers.hsl2rgb(hsl[0], hsl[1] / 100, hsl[2] / 100);
+
+    CTX.shadowColor = `rgb(${r},${g},${b},${1})`;
+
+    CTX.shadowBlur = 0;
+
+    CTX.globalCompositeOperation = "lighter";
+
+    CTX.fillStyle = `rgb(${r},${g},${b},${1})`;
+
+    CTX.fillRect(x, y, this.size, this.size);
+
+    CTX.globalCompositeOperation = "source-over";
+
+  }
+
+  update() {
+
+    this.draw();
+
+    this.size -= 0.3;
+
+    this.ttl += 1;
+
+    this.pos.add(this.vel);
+
+    this.vel.y -= this.gravity;
+
+  }
+
+}
+
+function incrementScore() {
+
+  score++;
+
+  dom_score.innerText = score.toString().padStart(2, "0");
+
+}
+
+function particleSplash() {
+
+  for (let i = 0; i < splashingParticleCount; i++) {
+
+    let vel = new helpers.Vec(Math.random() * 6 - 3, Math.random() * 6 - 3);
+
+    let position = new helpers.Vec(food.pos.x, food.pos.y);
+
+    particles.push(new Particle(position, currentHue, food.size, vel));
+
+  }
+
+}
+
+function clear() {
+
+  CTX.clearRect(0, 0, W, H);
+
+}
+
+function initialize() {
+
+  CTX.imageSmoothingEnabled = false;
+
+  KEY.listen();
+
+  cellsCount = cells * cells;
+
+  cellSize = W / cells;
+
+  snake = new Snake();
+
+  food = new Food();
+
+  dom_replay.addEventListener("click", reset, false);
+
+  loop();
+
+}
+
+function loop() {
+
+  clear();
+
+  if (!isGameOver) {
+
+    requestID = setTimeout(loop, 1000 / 60);
+
+    helpers.drawGrid();
+
+    snake.update();
+
+    food.draw();
+
+    for (let p of particles) {
+
+      p.update();
+
+    }
+
+    helpers.garbageCollector();
+
+  } else {
+
+    clear();
+
+    gameOver();
+
+  }
+
+}
+
+function gameOver() {
+
+  maxScore ? null : (maxScore = score);
+
+  score > maxScore ? (maxScore = score) : null;
+
+  window.localStorage.setItem("maxScore", maxScore);
+
+  CTX.fillStyle = "#4cffd7";
+
+  CTX.textAlign = "center";
+
+  CTX.font = "bold 30px Poppins, sans-serif";
+
+  CTX.fillText("GAME OVER", W / 2, H / 2);
+
+  CTX.font = "15px Poppins, sans-serif";
+
+  CTX.fillText(`SCORE   ${score}`, W / 2, H / 2 + 60);
+
+  CTX.fillText(`MAXSCORE   ${maxScore}`, W / 2, H / 2 + 80);
+
+}
+
+function reset() {
+
+  dom_score.innerText = "00";
+
+  score = "00";
+
+  snake = new Snake();
+
+  food.spawn();
+
+  KEY.resetState();
+
+  isGameOver = false;
+
+  clearTimeout(requestID);
+
+  loop();
+
+}
+
+initialize();
+ 
