@@ -1,80 +1,301 @@
-* {
-  font-family: Helvetica, sans-serif;
-  margin: 0;
-  padding: 0;
+/* Import Google Fonts for a modern look */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Basic styles for the entire page */
+body {
+    font-family: 'Inter', sans-serif; /* Use Inter font */
+    margin: 0;
+    padding: 0;
+    background-color: #e8f0fe; /* Azul muito claro para o fundo */
+    color: #2c3e50; /* Azul escuro para o texto padrão */
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* Ensure full viewport height */
+    
+    /* Adicionando a imagem de fundo */
+    background-image: url('https://img.freepik.com/fotos-premium/mesa-de-madeira_36051-46.jpg?semt=ais_hybrid&w=740');
+    background-size: cover; /* Cobre toda a área, cortando se necessário */
+    background-repeat: no-repeat; /* Evita a repetição da imagem */
+    background-position: center center; /* Centraliza a imagem */
+    background-attachment: fixed; /* Fixa a imagem de fundo ao rolar a página */
 }
 
+/* Container for main content to center it */
+.main-content-container {
+    flex-grow: 1; /* Allows content to take up available space */
+    padding: 2em;
+    max-width: 960px; /* Max width for readability */
+    margin: 0 auto; /* Center the container */
+    width: 100%;
+    box-sizing: border-box; /* Include padding in width */
+}
+
+/* Navbar styling */
 #navbar {
-  border-bottom: 1px solid #ccc;
-  padding: 1em;
-  margin-bottom: 1em;
+    background-color: #2a5a8a; /* Azul médio-escuro para a navbar */
+    padding: 1em 2em;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    margin-bottom: 2em;
 }
 
 #navbar ul {
-  display: flex;
-  list-style: none;
+    display: flex;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    justify-content: center; /* Center nav items */
+    gap: 2em; /* Space between nav items */
 }
 
-#navbar ul li {
-  margin-left: 1em;
+#navbar ul li a {
+    color: #e0f2f7; /* Azul claro para o texto do link */
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.5em 1em;
+    border-radius: 8px; /* Rounded corners for links */
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-h1 {
-  text-align: center;
-  margin-bottom: 1em;
+#navbar ul li a:hover,
+#navbar ul li a.active {
+    background-color: #3b76b2; /* Azul um pouco mais claro no hover/ativo */
+    color: #ffffff; /* Branco puro no hover/ativo para destaque */
 }
 
+/* General heading styles */
+h1, h2 {
+    text-align: center;
+    margin-bottom: 1.5em;
+    color: #1a334d; /* Azul marinho para os títulos */
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+/* Form container */
 .form {
-  width: 450px;
-  margin: 0 auto;
+    background-color: #ffffff;
+    padding: 2.5em;
+    border-radius: 12px; /* More rounded corners */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 500px; /* Max width for forms */
+    margin: 2em auto; /* Center forms with more vertical margin */
+    box-sizing: border-box;
+    border: 1px solid #dbe9fc; /* Borda azul clara */
 }
 
 .form-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0.5em;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 1.2em; /* More space between form controls */
 }
 
 .form-control label {
-  font-weight: bold;
-  margin-bottom: 0.3em;
+    font-weight: 600;
+    margin-bottom: 0.5em;
+    color: #4a6c8e; /* Azul acinzentado para as labels */
+    font-size: 0.95em;
 }
 
-.form-control input {
-  padding: 5px;
+.form-control input[type="text"],
+.form-control input[type="number"] {
+    padding: 0.8em 1em;
+    border: 1px solid #b3d9ff; /* Borda azul mais acentuada */
+    border-radius: 8px; /* Rounded input fields */
+    font-size: 1em;
+    color: #333;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* BOOKS */
+.form-control input[type="text"]:focus,
+.form-control input[type="number"]:focus {
+    border-color: #007bff; /* Azul vibrante no foco */
+    box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.25); /* Sombra azul suave */
+    outline: none;
+}
+
+/* Submit button styling */
+input[type="submit"] {
+    background-color: #007bff; /* Azul padrão para o botão */
+    color: white;
+    padding: 0.9em 1.5em;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    width: 100%; /* Full width button */
+    margin-top: 1.5em; /* Space above button */
+    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
+}
+
+input[type="submit"]:hover {
+    background-color: #0056b3; /* Azul mais escuro no hover */
+    transform: translateY(-2px); /* Slight lift effect */
+}
+
+/* BOOKS listing container */
 .books-container {
-  width: 450px;
-  margin: 0 auto;
+    background-color: #ffffff;
+    padding: 2em;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 600px;
+    margin: 2em auto;
+    box-sizing: border-box;
+    border: 1px solid #dbe9fc; /* Borda azul clara */
 }
 
 .books-container div {
-  border-bottom: 1px solid #ccc;
-  padding: 5px;
-  margin: 5px;
+    border-bottom: 1px solid #e1ecfe; /* Borda inferior mais clara */
+    padding: 0.8em 0;
+    margin: 0.5em 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Space out content */
+    font-size: 1.05em;
+    color: #4a6c8e; /* Azul acinzentado para o texto da lista */
 }
 
-.bold {
-  font-weight: bold;
+.books-container div:last-child {
+    border-bottom: none; /* No border for the last item */
 }
 
-/* BOOK */
+.books-container div .bold a {
+    color: #007bff; /* Azul vibrante para os títulos dos livros */
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.3s ease;
+}
+
+.books-container div .bold a:hover {
+    color: #0056b3; /* Azul mais escuro no hover */
+    text-decoration: underline;
+}
+
+/* Specific styling for the book detail page */
 #book-page {
-  padding: 2em;
+    padding: 3em;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    margin: 2em auto;
+    text-align: center; /* Center content on book page */
+    border: 1px solid #dbe9fc; /* Borda azul clara */
 }
 
-#book-page .container {
-  text-align: center;
+#book-page .container h1 {
+    font-size: 2.2em;
+    margin-bottom: 0.5em;
+    color: #1a334d; /* Azul marinho para o título */
+}
+
+#book-page .container p {
+    font-size: 1.1em;
+    color: #4a6c8e; /* Azul acinzentado para o parágrafo */
+    margin-bottom: 1.5em;
 }
 
 .actions {
-  margin-top: 1em;
-  display: flex;
-  justify-content: center;
+    margin-top: 2em;
+    display: flex;
+    justify-content: center;
+    gap: 1.5em; /* Space between action buttons/links */
+}
+
+.actions a,
+.actions input[type="submit"] {
+    display: inline-block;
+    padding: 0.8em 1.5em;
+    border-radius: 8px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease; /* Adicionado box-shadow na transição */
 }
 
 .actions a {
-  margin-right: 1em;
+    background-color: #007bff; /* Azul padrão para links de ação */
+    color: white;
+}
+
+.actions a:hover {
+    background-color: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 123, 255, 0.3); /* Sombra maior no hover */
+}
+
+.actions form input[type="submit"] {
+    background-color: #dc3545; /* Vermelho para o botão de remover (padrão para ações destrutivas) */
+    color: white;
+    border: none;
+    box-shadow: 0 4px 10px rgba(220, 53, 69, 0.2);
+}
+
+.actions form input[type="submit"]:hover {
+    background-color: #c82333; /* Vermelho mais escuro no hover */
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(220, 53, 69, 0.3); /* Sombra maior no hover */
+}
+
+/* Animação 'pulse' mais pronunciada */
+.animate-hover {
+    animation: bounce 0.6s ease-in-out; /* Animação única ao invés de infinita para evitar sobreposição */
+    animation-fill-mode: forwards; /* Mantém o estado final da animação */
+}
+
+@keyframes bounce {
+    0% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
+    }
+    50% {
+        transform: translateY(-5px) scale(1.03); /* Leve pulo e aumento */
+        box-shadow: 0 8px 20px rgba(0, 123, 255, 0.4); /* Sombra mais forte */
+    }
+    100% {
+        transform: translateY(-2px) scale(1); /* Volta para a posição normal de hover */
+        box-shadow: 0 6px 12px rgba(0, 123, 255, 0.3); /* Sombra no estado final */
+    }
+}
+
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    #navbar ul {
+        flex-direction: column;
+        align-items: center;
+        gap: 1em;
+    }
+
+    .form, .books-container, #book-page {
+        margin: 1.5em auto;
+        padding: 1.5em;
+    }
+
+    h1, h2 {
+        font-size: 1.8em;
+    }
+
+    .form-control input[type="text"],
+    .form-control input[type="number"],
+    input[type="submit"] {
+        padding: 0.7em 1em;
+        font-size: 1em;
+    }
+
+    .actions {
+        flex-direction: column;
+        gap: 1em;
+    }
+
+    .actions a,
+    .actions input[type="submit"] {
+        width: 100%;
+        text-align: center;
+    }
 }
